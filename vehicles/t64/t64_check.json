@@ -1,0 +1,5 @@
+{"blend": "RC_T64_v001.blend", "ref": "refs/t64.png", "sheet": "RC_T64_v001_check.png", "upscale": 2,
+ "views": [
+  {"name": "side", "box": [0, 30, 850, 265], "pxm": 91.1, "dir": "left", "anchor_px": [575, 252], "anchor": [0, 0, 0]},
+  {"name": "top", "box": [230, 300, 830, 640], "pxm": 91.1, "dir": "top_noseleft", "anchor_px": [575, 470], "anchor": [0, 0, 0]},
+  {"name": "front", "box": [860, 40, 1200, 270], "pxm": 91.1, "dir": "front", "anchor_px": [1030, 255], "anchor": [0, 0, 0]}]}

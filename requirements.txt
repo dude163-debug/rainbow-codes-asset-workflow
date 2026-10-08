@@ -1,0 +1,5 @@
+# Scripts run inside Blender 5.1 (bpy, bmesh, mathutils come with Blender).
+# Needed by shared_kit/grid.py and shared_kit/check_views.py:
+Pillow>=9.0
+# Optional: run everything with plain Python 3.13 instead of blender.exe
+# bpy==5.1.2

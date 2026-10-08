@@ -1,0 +1,186 @@
+RAINBOW CODES - DRAWING-TO-MODEL WORKFLOW
+=========================================
+
+How to turn a reference drawing into a game-ready low-poly 3D model using
+nothing but a Python script running in Blender. Each step below gives the
+real numbers from the two included examples: the T-64 tank and the
+Niedersachsenhaus.
+
+The whole idea: every shape in the model is placed at a measured position
+in metres, and the model is checked against the drawing before it goes
+into the game. Nothing is eyeballed in the 3D viewport.
+
+
+STEP 1 - GET A GOOD REFERENCE DRAWING
+-------------------------------------
+Best: a three-view (side, top, front) drawn orthographically, i.e. flat,
+no perspective. A section or elevation drawing also works for buildings.
+
+  T-64:   Object 432 three-view (side, top, front).
+  House:  long section plus cross section of a Lower Saxon hall house.
+
+Note where the drawing came from. If two views disagree, decide which one
+you trust and write that decision down in the build script.
+
+
+STEP 2 - WORK OUT THE SCALE (PIXELS PER METRE)
+----------------------------------------------
+Find one or two things on the drawing whose real size you know: overall
+length, gun length, track width, wall width. Measure them in pixels and
+divide.
+
+    px_per_m = pixels / metres
+
+  T-64:   8,618 mm overall with gun forward  ->  91.1 px/m
+  House:  end wall 296 px, taken as 12.0 m   ->  24.7 px/m
+
+Cross-check with a second known dimension. If the two answers disagree by
+more than a few percent, the drawing is stretched or the known size is
+wrong. Sort that out now, because everything after this depends on it.
+
+
+STEP 3 - MEASURE EVERYTHING WITH THE GRID
+-----------------------------------------
+grid.py crops part of the drawing, enlarges it and draws a pixel grid
+labelled in the ORIGINAL drawing's pixel coordinates:
+
+    python shared_kit/grid.py refs/t64.png 0 30 850 265 measure_side.png 10 3
+                              (image)  x0 y0  x1  y1  (output)    step zoom
+
+Read the positions you need (hull corners, wheel centres, turret ring,
+roof ridge, eaves, door edges) straight off the enlarged image, then
+convert them:
+
+    metres = (pixel - origin_pixel) / px_per_m
+
+  T-64:   road wheel radius 0.275 m, turret ring height 1.40 m,
+          gun pivot 1.45 m forward and 1.61 m up.
+  House:  eaves 3.3 m, ridge 10.4 m, small hipped end starting at 5.0 m,
+          ridge ends 1.9 m in from the gable walls, posts every 2.7 m.
+
+
+STEP 4 - CHOOSE ONE ORIGIN AND STICK TO IT
+------------------------------------------
+Pick a single point that is (0, 0, 0), and measure everything from it.
+
+  Vehicles:  on the ground, directly under the turret ring centre.
+             +Y forward, +X right, +Z up.
+  Buildings: ground level, centre of the footprint. Long axis = X.
+
+1 Blender unit = 1 metre, always. Then the model drops into Godot at true
+size with no rescaling.
+
+
+STEP 5 - WRITE THE BUILD SCRIPT
+-------------------------------
+Put every measurement at the top of the script as a named number, then
+build the object out of simple pieces:
+
+  box        a block (deck boxes, hatches, wall panels, timber beams)
+  prism      a side profile pushed out sideways (hull sides, gable walls)
+  cylinder   wheels, rollers, barrels, lights
+  loft       rings stacked into a smooth shape (cast turret)
+
+  T-64:   the hull is an 8-point side profile extruded across its width.
+          There are 6 road wheels, 6 return rollers, an idler and a
+          sprocket per side, and a 16-sided lofted turret. The script is
+          about 100 lines using shared_kit/rc_vehicle_kit.py.
+  House:  plinth, 4 walls (the gable walls are pentagons rising into the
+          roof), a solid thatched roof with half-hip ends, timber posts and
+          rails, windows, a house door and the big barn gate (Grote Door).
+
+Keep the moving parts separate so the game can animate them:
+
+    ROOT
+     |- Hull
+     |- Turret   (rotates for traverse)
+          |- Gun      (rotates for elevation)
+               |- Muzzle   (shot origin)
+
+Positions are world coordinates in metres. Parent objects without adding
+any further offset.
+
+Keep the detail low on purpose: 2-6k triangles, flat shading, plain
+colours. Add detail only where it changes the silhouette.
+
+
+STEP 6 - RUN IT
+---------------
+    & "C:\Program Files\Blender Foundation\Blender 5.1\blender.exe" --background --python build_t64_v001.py
+
+(PowerShell needs the & because the path contains spaces.)
+
+The script clears the scene, builds the model, saves a .blend and exports
+a .glb. It takes a few seconds, and you can re-run it as often as you like.
+
+
+STEP 7 - CHECK AGAINST THE DRAWING
+----------------------------------
+This is the step that makes the method work. Render flat (orthographic)
+views of the model at EXACTLY the drawing's px/m and lay them over the
+drawing.
+
+  Vehicles:  check_views.py reads a small JSON file that says which part
+             of the drawing is which view, its px/m, and one pixel that
+             corresponds to a known world point (usually the origin):
+
+     {"name": "side", "box": [0, 30, 850, 265], "pxm": 91.1,
+      "dir": "left", "anchor_px": [575, 252], "anchor": [0, 0, 0]}
+
+             It outputs a sheet with three images per view:
+             reference | render | overlay (drawing lines in red).
+
+  House:     build_house.py renders the front and end at 24.7 px/m and
+             places them under the drawing (check_vs_drawing.png), plus
+             two 3/4 views.
+
+Look for edges that don't line up: a wheel in the wrong place, a turret
+too tall, eaves too low. Fix the number in the script, re-run, re-check.
+Usually 1-3 rounds are enough.
+
+  House example: the first pass had the eaves at 3.0 m, which hid the
+  windows. The overlay showed the drawing's eave line higher, so it was
+  raised to 3.3 m and the walls to 3.6 m. The windows were also moved to
+  the bay centres so they stopped overlapping the posts.
+
+
+STEP 8 - EXPORT AND CHECK IN THE GAME
+-------------------------------------
+Copy the .glb into the Godot project. Then check that:
+  - it sits on the ground at the origin, at true size;
+  - the turret and gun rotate about the right points (vehicles);
+  - the muzzle points downrange (vehicles);
+  - the triangle count is in budget.
+
+Keep the .blend, the check images and the build script together with the
+.glb. The script is the real source file. The model can always be
+regenerated from it.
+
+
+MAKING THE NEXT ASSET
+---------------------
+Copy the closest existing build script, swap in the new drawing, redo
+steps 2-3 for the new px/m and measurements, change the numbers, and run.
+The T-72, BTR-70, BRDM-2, Chieftain, Scorpion and Scimitar were all
+built this way on the same shared kit, without changing it. The British
+vehicles only add a small palette file for BAOR colours.
+
+
+COMMON PROBLEMS
+---------------
+"Unexpected token" in PowerShell
+    Put & in front of the quoted blender.exe path.
+
+No module named PIL
+    Blender's own Python lacks Pillow. Install it once (see README).
+
+Model is the right shape but the wrong size
+    The px/m is wrong. Redo step 2 with a different known dimension.
+
+Model is offset from the drawing in the check
+    The anchor pixel or the origin is wrong. Make sure anchor_px really
+    is the pixel showing the world point you gave as the anchor.
+
+Output files can't be found
+    Every script writes next to itself (the vehicle kit uses the folder
+    passed to K.begin). Look in the script's own folder.
